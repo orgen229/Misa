@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <title>ESP32 DHT11 Dashboard</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f5f7;
+            margin: 0;
+            padding: 20px;
+            color: #222;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            text-align: center;
+        }
+
+        .card h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #555;
+        }
+
+        .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .status-normal {
+            color: #15803d;
+        }
+
+        .status-warning {
+            color: #d97706;
+        }
+
+        .status-danger {
+            color: #dc2626;
+        }
+
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+        }
+
+        .chart-box {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+
+        table {
+            margin-top: 30px;
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+
+        th {
+            background: #e5e7eb;
+        }
+
+        @media (max-width: 900px) {
+            .cards {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>IoT dashboard: ESP32 + DHT11</h1>
+
+    <div class="cards">
+        <div class="card">
+            <h2>Teplota</h2>
+            <div id="temperature" class="value">-- °C</div>
+        </div>
+
+        <div class="card">
+            <h2>Vlhkosť</h2>
+            <div id="humidity" class="value">-- %</div>
+        </div>
+
+        <div class="card">
+            <h2>Senzor</h2>
+            <div id="sensor" class="value">--</div>
+        </div>
+
+        <div class="card">
+            <h2>Posledné meranie</h2>
+            <div id="timestamp" style="font-size: 20px;">--</div>
+        </div>
+    </div>
+
+    <div class="charts">
+        <div class="chart-box">
+            <h2>Graf teploty</h2>
+            <canvas id="temperatureChart"></canvas>
+        </div>
+
+        <div class="chart-box">
+            <h2>Graf vlhkosti</h2>
+            <canvas id="humidityChart"></canvas>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Čas</th>
+                <th>Teplota [°C]</th>
+                <th>Vlhkosť [%]</th>
+                <th>Senzor</th>
+            </tr>
+        </thead>
+        <tbody id="dataTable">
+        </tbody>
+    </table>
+
+    <script>
+        const temperatureCtx = document.getElementById("temperatureChart").getContext("2d");
+        const humidityCtx = document.getElementById("humidityChart").getContext("2d");
+
+        const temperatureChart = new Chart(temperatureCtx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Teplota [°C]",
+                    data: [],
+                    borderWidth: 2,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+
+        const humidityChart = new Chart(humidityCtx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Vlhkosť [%]",
+                    data: [],
+                    borderWidth: 2,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        suggestedMin: 0,
+                        suggestedMax: 100
+                    }
+                }
+            }
+        });
+
+        function setTemperatureColor(value) {
+            const tempElement = document.getElementById("temperature");
+
+            tempElement.classList.remove("status-normal", "status-warning", "status-danger");
+
+            if (value < 28) {
+                tempElement.classList.add("status-normal");
+            } else if (value < 32) {
+                tempElement.classList.add("status-warning");
+            } else {
+                tempElement.classList.add("status-danger");
+            }
+        }
+
+        async function loadLatest() {
+            try {
+                const response = await fetch("/api/latest");
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const data = await response.json();
+
+                document.getElementById("temperature").innerText =
+                    data.temperature.toFixed(1) + " " + data.unit_temperature;
+
+                document.getElementById("humidity").innerText =
+                    data.humidity.toFixed(1) + " " + data.unit_humidity;
+
+                document.getElementById("sensor").innerText = data.sensor;
+                document.getElementById("timestamp").innerText = data.timestamp;
+
+                setTemperatureColor(data.temperature);
+            } catch (error) {
+                console.log("Latest data error:", error);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch("/api/history");
+                const history = await response.json();
+
+                const labels = history.map(item => item.timestamp);
+                const temperatures = history.map(item => item.temperature);
+                const humidities = history.map(item => item.humidity);
+
+                temperatureChart.data.labels = labels;
+                temperatureChart.data.datasets[0].data = temperatures;
+                temperatureChart.update();
+
+                humidityChart.data.labels = labels;
+                humidityChart.data.datasets[0].data = humidities;
+                humidityChart.update();
+
+                const table = document.getElementById("dataTable");
+                table.innerHTML = "";
+
+                history.slice().reverse().forEach(item => {
+                    const row = document.createElement("tr");
+
+                    row.innerHTML = `
+                        <td>${item.timestamp}</td>
+                        <td>${item.temperature.toFixed(1)}</td>
+                        <td>${item.humidity.toFixed(1)}</td>
+                        <td>${item.sensor}</td>
+                    `;
+
+                    table.appendChild(row);
+                });
+            } catch (error) {
+                console.log("History data error:", error);
+            }
+        }
+
+        function refreshDashboard() {
+            loadLatest();
+            loadHistory();
+        }
+
+        refreshDashboard();
+        setInterval(refreshDashboard, 5000);
+    </script>
+</body>
+</html>
