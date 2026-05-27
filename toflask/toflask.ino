@@ -3,6 +3,7 @@
 #include "DHT.h"
 
 #define DHTPIN 22
+#define RELAY_PIN 23
 #define DHTTYPE DHT11
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -16,6 +17,25 @@ const char* SERVER_URL = "http://172.20.10.3:5000/api/data";
 
 const unsigned long MEASUREMENT_INTERVAL = 5000;
 unsigned long lastMeasurementTime = 0;
+
+// Temperature thresholds
+const float FAN_ON_TEMP = 33.0;
+const float FAN_OFF_TEMP = 32.0;
+
+bool fanState = false;
+
+// Если реле active LOW:
+// LOW  = relay ON
+// HIGH = relay OFF
+void setFan(bool state) {
+  fanState = state;
+
+  if (fanState) {
+    digitalWrite(RELAY_PIN, LOW);   // fan ON
+  } else {
+    digitalWrite(RELAY_PIN, HIGH);  // fan OFF
+  }
+}
 
 void connectToWiFi() {
   Serial.print("Connecting to WiFi: ");
@@ -64,7 +84,10 @@ void sendDataToServer(float temperature, float humidity) {
     json += ",";
     json += "\"unit_temperature\":\"C\",";
     json += "\"unit_humidity\":\"%\",";
-    json += "\"sensor\":\"DHT11\"";
+    json += "\"sensor\":\"DHT11\",";
+    json += "\"fan_state\":\"";
+    json += fanState ? "ON" : "OFF";
+    json += "\"";
     json += "}";
 
     Serial.println("Sending JSON:");
@@ -96,6 +119,9 @@ void setup() {
 
   Serial.println("ESP32 DHT11 HTTP sender started");
 
+  pinMode(RELAY_PIN, OUTPUT);
+  setFan(false); // fan OFF at startup
+
   dht.begin();
   connectToWiFi();
 }
@@ -114,6 +140,15 @@ void loop() {
       return;
     }
 
+    // Fan control with hysteresis
+    if (!fanState && temperature >= FAN_ON_TEMP) {
+      setFan(true);
+    }
+
+    if (fanState && temperature <= FAN_OFF_TEMP) {
+      setFan(false);
+    }
+
     Serial.println("----------------------");
     Serial.print("Temperature: ");
     Serial.print(temperature);
@@ -122,6 +157,9 @@ void loop() {
     Serial.print("Humidity: ");
     Serial.print(humidity);
     Serial.println(" %");
+
+    Serial.print("Fan state: ");
+    Serial.println(fanState ? "ON" : "OFF");
 
     sendDataToServer(temperature, humidity);
   }
