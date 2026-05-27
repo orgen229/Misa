@@ -9,8 +9,8 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 // Wi-Fi hotspot
-const char* WIFI_SSID = "iPhone (Егор)";
-const char* WIFI_PASSWORD = "slon229337";
+const char* WIFI_SSID = "WIFI_NAME";
+const char* WIFI_PASSWORD = "PASSWORD";
 
 // Flask server on Windows → VirtualBox port forwarding
 const char* SERVER_URL = "http://172.20.10.3:5000/api/data";
