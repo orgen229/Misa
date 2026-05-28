@@ -140,6 +140,14 @@
         </div>
     </div>
 
+    <div style="margin-bottom: 20px; text-align: center;">
+        <label for="historyMode"><b>Zobrazenie histórie:</b></label>
+        <select id="historyMode" onchange="refreshDashboard()">
+            <option value="last20">Posledných 20 meraní</option>
+            <option value="24h">Posledných 24 hodín</option>
+        </select>
+    </div>
+
     <table>
         <thead>
             <tr>
@@ -242,7 +250,8 @@
 
         async function loadHistory() {
             try {
-                const response = await fetch("/api/history");
+                const mode = document.getElementById("historyMode").value;
+                const response = await fetch("/api/history?mode=" + mode);
                 const history = await response.json();
 
                 const labels = history.map(item => item.timestamp);

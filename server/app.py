@@ -127,15 +127,24 @@ def latest_data():
 
 @app.route("/api/history", methods=["GET"])
 def history_data():
+    mode = request.args.get("mode", default="last20", type=str)
+
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT * FROM measurements
-        ORDER BY id DESC
-        LIMIT 100
-    """)
+    if mode == "24h":
+        cursor.execute("""
+            SELECT * FROM measurements
+            WHERE datetime(timestamp) >= datetime('now', '-24 hours')
+            ORDER BY id ASC
+        """)
+    else:
+        cursor.execute("""
+            SELECT * FROM measurements
+            ORDER BY id DESC
+            LIMIT 20
+        """)
 
     rows = cursor.fetchall()
     conn.close()
@@ -153,7 +162,8 @@ def history_data():
             "timestamp": row["timestamp"]
         })
 
-    history.reverse()
+    if mode == "last20":
+        history.reverse()
 
     return jsonify(history)
 
