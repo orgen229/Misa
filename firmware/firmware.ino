@@ -9,8 +9,8 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 // Wi-Fi hotspot
-const char* WIFI_SSID = "WIFI_NAME";
-const char* WIFI_PASSWORD = "PASSWORD";
+const char* WIFI_SSID = "iPhone (Егор)";
+const char* WIFI_PASSWORD = "slon229337";
 
 // Flask server on Windows → VirtualBox port forwarding
 const char* SERVER_URL = "http://172.20.10.3:5000/api/data";
@@ -31,9 +31,12 @@ void setFan(bool state) {
   fanState = state;
 
   if (fanState) {
-    digitalWrite(RELAY_PIN, LOW);   // fan ON
+    // Relay ON: ESP32 pulls IN to GND
+    pinMode(RELAY_PIN, OUTPUT);
+    digitalWrite(RELAY_PIN, LOW);
   } else {
-    digitalWrite(RELAY_PIN, HIGH);  // fan OFF
+    // Relay OFF: ESP32 releases IN pin
+    pinMode(RELAY_PIN, INPUT);
   }
 }
 
@@ -119,7 +122,8 @@ void setup() {
 
   Serial.println("ESP32 DHT11 HTTP sender started");
 
-  pinMode(RELAY_PIN, OUTPUT);
+ 
+  pinMode(RELAY_PIN, INPUT);
   setFan(false); // fan OFF at startup
 
   dht.begin();
