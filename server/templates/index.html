@@ -2,81 +2,116 @@
 <html lang="sk">
 <head>
     <meta charset="UTF-8">
-    <title>ESP32 DHT11 Dashboard</title>
-
+    <title>ESP32 DHT11 IoT Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         body {
             font-family: Arial, sans-serif;
             background: #f3f5f7;
-            margin: 0;
             padding: 20px;
             color: #222;
         }
 
         h1 {
             text-align: center;
-            margin-bottom: 30px;
+        }
+
+        .panel, .chart-box, table {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            background: #2563eb;
+            color: white;
+        }
+
+        button.secondary {
+            background: #4b5563;
+        }
+
+        button.danger {
+            background: #dc2626;
+        }
+
+        input, select {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #aaa;
+            margin: 5px;
         }
 
         .cards {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 15px;
             margin-bottom: 30px;
         }
 
         .card {
             background: white;
-            border-radius: 12px;
             padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            border-radius: 12px;
             text-align: center;
-        }
-
-        .card h2 {
-            margin: 0 0 10px 0;
-            font-size: 18px;
-            color: #555;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
         .value {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: bold;
         }
 
-        .status-normal {
+        .normal {
             color: #15803d;
         }
 
-        .status-warning {
+        .warning {
             color: #d97706;
         }
 
-        .status-danger {
+        .danger-text {
             color: #dc2626;
         }
 
-        .charts {
+        .gauges {
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
         }
 
-        .chart-box {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        canvas.gauge {
+            max-width: 360px;
+            width: 100%;
+            height: 210px;
+            display: block;
+            margin: auto;
+        }
+
+        .chart-box canvas {
+            max-height: 320px;
         }
 
         table {
-            margin-top: 30px;
             width: 100%;
             border-collapse: collapse;
-            background: white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            padding: 0;
+            overflow: hidden;
         }
 
         th, td {
@@ -89,9 +124,13 @@
             background: #e5e7eb;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1000px) {
             .cards {
                 grid-template-columns: 1fr 1fr;
+            }
+
+            .gauges {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -104,7 +143,33 @@
 </head>
 
 <body>
-    <h1>IoT dashboard: ESP32 + DHT11</h1>
+    <h1>IoT Dashboard: ESP32 + DHT11</h1>
+
+    <div class="panel">
+        <h2>Ovládanie systému</h2>
+        <div class="controls">
+            <button onclick="sendCommand('/api/open')">Open</button>
+            <button onclick="sendCommand('/api/start')">Start</button>
+            <button class="secondary" onclick="sendCommand('/api/stop')">Stop</button>
+            <button class="danger" onclick="sendCommand('/api/close')">Close</button>
+        </div>
+        <p id="systemStatus">Stav systému: --</p>
+    </div>
+
+    <div class="panel">
+        <h2>Nastavenie parametrov regulácie</h2>
+        <label>Fan ON teplota [°C]:</label>
+        <input id="fanOnInput" type="number" step="0.1" value="33.0">
+
+        <label>Fan OFF teplota [°C]:</label>
+        <input id="fanOffInput" type="number" step="0.1" value="32.0">
+
+        <label>Interval merania [ms]:</label>
+        <input id="intervalInput" type="number" step="1000" value="5000">
+
+        <button onclick="saveConfig()">Uložiť parametre</button>
+        <p id="configStatus">Parametre: --</p>
+    </div>
 
     <div class="cards">
         <div class="card">
@@ -123,29 +188,49 @@
         </div>
 
         <div class="card">
+            <h2>Ventilátor</h2>
+            <div id="fanState" class="value">--</div>
+        </div>
+
+        <div class="card">
             <h2>Posledné meranie</h2>
-            <div id="timestamp" style="font-size: 20px;">--</div>
+            <div id="timestamp">--</div>
         </div>
     </div>
 
-    <div class="charts">
-        <div class="chart-box">
-            <h2>Graf teploty</h2>
-            <canvas id="temperatureChart"></canvas>
-        </div>
-
-        <div class="chart-box">
-            <h2>Graf vlhkosti</h2>
-            <canvas id="humidityChart"></canvas>
+    <div class="panel">
+        <h2>Ručičkové ukazovatele</h2>
+        <div class="gauges">
+            <div>
+                <h3 style="text-align:center;">Teplota [°C]</h3>
+                <canvas id="temperatureGauge" class="gauge" width="360" height="210"></canvas>
+            </div>
+            <div>
+                <h3 style="text-align:center;">Vlhkosť [%]</h3>
+                <canvas id="humidityGauge" class="gauge" width="360" height="210"></canvas>
+            </div>
         </div>
     </div>
 
-    <div style="margin-bottom: 20px; text-align: center;">
+    <div class="panel" style="text-align:center;">
         <label for="historyMode"><b>Zobrazenie histórie:</b></label>
         <select id="historyMode" onchange="refreshDashboard()">
             <option value="last20">Posledných 20 meraní</option>
             <option value="24h">Posledných 24 hodín</option>
         </select>
+
+        <button onclick="loadFileHistory()">Zobraziť údaje zo súboru CSV</button>
+        <button onclick="window.location.href='/api/download-csv'">Stiahnuť CSV</button>
+    </div>
+
+    <div class="chart-box">
+        <h2>Graf teploty</h2>
+        <canvas id="temperatureChart"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h2>Graf vlhkosti</h2>
+        <canvas id="humidityChart"></canvas>
     </div>
 
     <table>
@@ -154,11 +239,11 @@
                 <th>Čas</th>
                 <th>Teplota [°C]</th>
                 <th>Vlhkosť [%]</th>
+                <th>Ventilátor</th>
                 <th>Senzor</th>
             </tr>
         </thead>
-        <tbody id="dataTable">
-        </tbody>
+        <tbody id="dataTable"></tbody>
     </table>
 
     <script>
@@ -177,12 +262,7 @@
                 }]
             },
             options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: false
-                    }
-                }
+                responsive: true
             }
         });
 
@@ -201,7 +281,6 @@
                 responsive: true,
                 scales: {
                     y: {
-                        beginAtZero: false,
                         suggestedMin: 0,
                         suggestedMax: 100
                     }
@@ -209,17 +288,149 @@
             }
         });
 
+        function drawGauge(canvasId, value, min, max, label, unit) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext("2d");
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height * 0.82;
+            const radius = 130;
+
+            const startAngle = Math.PI;
+            const endAngle = 2 * Math.PI;
+
+            ctx.lineWidth = 22;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+            ctx.strokeStyle = "#e5e7eb";
+            ctx.stroke();
+
+            let ratio = (value - min) / (max - min);
+            ratio = Math.max(0, Math.min(1, ratio));
+
+            const valueAngle = startAngle + ratio * Math.PI;
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, valueAngle);
+            ctx.strokeStyle = "#2563eb";
+            ctx.stroke();
+
+            const needleLength = radius - 15;
+            const needleX = centerX + needleLength * Math.cos(valueAngle);
+            const needleY = centerY + needleLength * Math.sin(valueAngle);
+
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(needleX, needleY);
+            ctx.strokeStyle = "#111827";
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = "#111827";
+            ctx.fill();
+
+            ctx.fillStyle = "#111827";
+            ctx.font = "22px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(label, centerX, 35);
+
+            ctx.font = "28px Arial";
+            ctx.fillText(value.toFixed(1) + " " + unit, centerX, centerY - 35);
+
+            ctx.font = "16px Arial";
+            ctx.fillText(min + unit, centerX - radius, centerY + 25);
+            ctx.fillText(max + unit, centerX + radius, centerY + 25);
+        }
+
         function setTemperatureColor(value) {
             const tempElement = document.getElementById("temperature");
 
-            tempElement.classList.remove("status-normal", "status-warning", "status-danger");
+            tempElement.classList.remove("normal", "warning", "danger-text");
 
             if (value < 28) {
-                tempElement.classList.add("status-normal");
-            } else if (value < 32) {
-                tempElement.classList.add("status-warning");
+                tempElement.classList.add("normal");
+            } else if (value < 33) {
+                tempElement.classList.add("warning");
             } else {
-                tempElement.classList.add("status-danger");
+                tempElement.classList.add("danger-text");
+            }
+        }
+
+        function updateSystemState(state) {
+            if (!state) {
+                return;
+            }
+
+            document.getElementById("systemStatus").innerText =
+                "Stav systému: open=" + state.system_open +
+                ", monitoring=" + state.monitoring_active;
+
+            document.getElementById("configStatus").innerText =
+                "Fan ON: " + state.fan_on_threshold +
+                " °C, Fan OFF: " + state.fan_off_threshold +
+                " °C, Interval: " + state.measurement_interval + " ms";
+
+            document.getElementById("fanOnInput").value = state.fan_on_threshold;
+            document.getElementById("fanOffInput").value = state.fan_off_threshold;
+            document.getElementById("intervalInput").value = state.measurement_interval;
+        }
+
+        async function sendCommand(endpoint) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST"
+                });
+
+                const data = await response.json();
+                updateSystemState(data.state);
+                refreshDashboard();
+            } catch (error) {
+                console.log("Command error:", error);
+            }
+        }
+
+        async function saveConfig() {
+            const fanOn = parseFloat(document.getElementById("fanOnInput").value);
+            const fanOff = parseFloat(document.getElementById("fanOffInput").value);
+            const interval = parseInt(document.getElementById("intervalInput").value);
+
+            try {
+                const response = await fetch("/api/config", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        fan_on_threshold: fanOn,
+                        fan_off_threshold: fanOff,
+                        measurement_interval: interval
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === "error") {
+                    alert(data.message);
+                    return;
+                }
+
+                updateSystemState(data.state);
+            } catch (error) {
+                console.log("Config error:", error);
+            }
+        }
+
+        async function loadState() {
+            try {
+                const response = await fetch("/api/state");
+                const state = await response.json();
+                updateSystemState(state);
+            } catch (error) {
+                console.log("State error:", error);
             }
         }
 
@@ -228,6 +439,7 @@
                 const response = await fetch("/api/latest");
 
                 if (!response.ok) {
+                    loadState();
                     return;
                 }
 
@@ -241,10 +453,15 @@
 
                 document.getElementById("sensor").innerText = data.sensor;
                 document.getElementById("timestamp").innerText = data.timestamp;
+                document.getElementById("fanState").innerText = data.fan_state;
 
                 setTemperatureColor(data.temperature);
+                drawGauge("temperatureGauge", data.temperature, 0, 50, "Teplota", "°C");
+                drawGauge("humidityGauge", data.humidity, 0, 100, "Vlhkosť", "%");
+
+                updateSystemState(data.state);
             } catch (error) {
-                console.log("Latest data error:", error);
+                console.log("Latest error:", error);
             }
         }
 
@@ -254,42 +471,70 @@
                 const response = await fetch("/api/history?mode=" + mode);
                 const history = await response.json();
 
-                const labels = history.map(item => item.timestamp);
-                const temperatures = history.map(item => item.temperature);
-                const humidities = history.map(item => item.humidity);
-
-                temperatureChart.data.labels = labels;
-                temperatureChart.data.datasets[0].data = temperatures;
-                temperatureChart.update();
-
-                humidityChart.data.labels = labels;
-                humidityChart.data.datasets[0].data = humidities;
-                humidityChart.update();
-
-                const table = document.getElementById("dataTable");
-                table.innerHTML = "";
-
-                history.slice().reverse().forEach(item => {
-                    const row = document.createElement("tr");
-
-                    row.innerHTML = `
-                        <td>${item.timestamp}</td>
-                        <td>${item.temperature.toFixed(1)}</td>
-                        <td>${item.humidity.toFixed(1)}</td>
-                        <td>${item.sensor}</td>
-                    `;
-
-                    table.appendChild(row);
-                });
+                updateGraphsAndTable(history);
             } catch (error) {
-                console.log("History data error:", error);
+                console.log("History error:", error);
             }
         }
 
+        async function loadFileHistory() {
+            try {
+                const response = await fetch("/api/file-history?limit=20");
+                const history = await response.json();
+
+                const converted = history.map(item => ({
+                    timestamp: item.timestamp,
+                    temperature: parseFloat(item.temperature),
+                    humidity: parseFloat(item.humidity),
+                    fan_state: item.fan_state,
+                    sensor: item.sensor
+                }));
+
+                updateGraphsAndTable(converted);
+            } catch (error) {
+                console.log("File history error:", error);
+            }
+        }
+
+        function updateGraphsAndTable(history) {
+            const labels = history.map(item => item.timestamp);
+            const temperatures = history.map(item => item.temperature);
+            const humidities = history.map(item => item.humidity);
+
+            temperatureChart.data.labels = labels;
+            temperatureChart.data.datasets[0].data = temperatures;
+            temperatureChart.update();
+
+            humidityChart.data.labels = labels;
+            humidityChart.data.datasets[0].data = humidities;
+            humidityChart.update();
+
+            const table = document.getElementById("dataTable");
+            table.innerHTML = "";
+
+            history.slice().reverse().forEach(item => {
+                const row = document.createElement("tr");
+
+                row.innerHTML = `
+                    <td>${item.timestamp}</td>
+                    <td>${item.temperature.toFixed(1)}</td>
+                    <td>${item.humidity.toFixed(1)}</td>
+                    <td>${item.fan_state || "--"}</td>
+                    <td>${item.sensor}</td>
+                `;
+
+                table.appendChild(row);
+            });
+        }
+
         function refreshDashboard() {
+            loadState();
             loadLatest();
             loadHistory();
         }
+
+        drawGauge("temperatureGauge", 0, 0, 50, "Teplota", "°C");
+        drawGauge("humidityGauge", 0, 0, 100, "Vlhkosť", "%");
 
         refreshDashboard();
         setInterval(refreshDashboard, 5000);
