@@ -8,37 +8,95 @@
 
 DHT dht(DHTPIN, DHTTYPE);
 
-// Wi-Fi hotspot
+// ===== Wi-Fi settings =====
+// Before uploading, replace these values with your own Wi-Fi credentials.
 const char* WIFI_SSID = "iPhone (Егор)";
 const char* WIFI_PASSWORD = "slon229337";
 
-// Flask server on Windows → VirtualBox port forwarding
-const char* SERVER_URL = "http://172.20.10.3:5000/api/data";
+// ===== Server settings =====
+// Example: http://172.20.10.3:5000
+const char* SERVER_BASE_URL = "http://172.20.10.3:5000";
+const char* DATA_ENDPOINT = "/api/data";
+const char* CONFIG_ENDPOINT = "/api/config";
 
-const unsigned long MEASUREMENT_INTERVAL = 5000;
+unsigned long measurementInterval = 5000;
 unsigned long lastMeasurementTime = 0;
+unsigned long lastConfigTime = 0;
+const unsigned long CONFIG_INTERVAL = 5000;
 
-// Temperature thresholds
-const float FAN_ON_TEMP = 33.0;
-const float FAN_OFF_TEMP = 32.0;
+float fanOnTemp = 33.0;
+float fanOffTemp = 32.0;
 
 bool fanState = false;
+bool systemOpen = false;
+bool monitoringActive = false;
 
-// Если реле active LOW:
-// LOW  = relay ON
-// HIGH = relay OFF
+
+// Relay module is active LOW.
+// This relay works better in open-drain style:
+// ON  = GPIO pulls IN to GND
+// OFF = GPIO is released as INPUT
 void setFan(bool state) {
   fanState = state;
 
   if (fanState) {
-    // Relay ON: ESP32 pulls IN to GND
     pinMode(RELAY_PIN, OUTPUT);
-    digitalWrite(RELAY_PIN, LOW);
+    digitalWrite(RELAY_PIN, LOW);   // fan ON
   } else {
-    // Relay OFF: ESP32 releases IN pin
-    pinMode(RELAY_PIN, INPUT);
+    pinMode(RELAY_PIN, INPUT);      // fan OFF
   }
 }
+
+
+float extractJsonNumber(String json, String key, float defaultValue) {
+  String pattern = "\"" + key + "\":";
+  int start = json.indexOf(pattern);
+
+  if (start < 0) {
+    return defaultValue;
+  }
+
+  start += pattern.length();
+  int end = json.indexOf(",", start);
+
+  if (end < 0) {
+    end = json.indexOf("}", start);
+  }
+
+  if (end < 0) {
+    return defaultValue;
+  }
+
+  String value = json.substring(start, end);
+  value.trim();
+
+  return value.toFloat();
+}
+
+
+bool extractJsonBool(String json, String key, bool defaultValue) {
+  String pattern = "\"" + key + "\":";
+  int start = json.indexOf(pattern);
+
+  if (start < 0) {
+    return defaultValue;
+  }
+
+  start += pattern.length();
+  String value = json.substring(start, start + 5);
+  value.trim();
+
+  if (value.startsWith("true")) {
+    return true;
+  }
+
+  if (value.startsWith("false")) {
+    return false;
+  }
+
+  return defaultValue;
+}
+
 
 void connectToWiFi() {
   Serial.print("Connecting to WiFi: ");
@@ -66,6 +124,62 @@ void connectToWiFi() {
   }
 }
 
+
+String buildUrl(const char* endpoint) {
+  return String(SERVER_BASE_URL) + String(endpoint);
+}
+
+
+void fetchConfigFromServer() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected. Reconnecting...");
+    connectToWiFi();
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  HTTPClient http;
+  String url = buildUrl(CONFIG_ENDPOINT);
+
+  http.begin(url);
+  int responseCode = http.GET();
+
+  if (responseCode == 200) {
+    String response = http.getString();
+
+    fanOnTemp = extractJsonNumber(response, "fan_on_threshold", fanOnTemp);
+    fanOffTemp = extractJsonNumber(response, "fan_off_threshold", fanOffTemp);
+    measurementInterval = (unsigned long)extractJsonNumber(response, "measurement_interval", measurementInterval);
+
+    systemOpen = extractJsonBool(response, "system_open", systemOpen);
+    monitoringActive = extractJsonBool(response, "monitoring_active", monitoringActive);
+
+    Serial.println("Config updated from server:");
+    Serial.print("Fan ON threshold: ");
+    Serial.println(fanOnTemp);
+    Serial.print("Fan OFF threshold: ");
+    Serial.println(fanOffTemp);
+    Serial.print("Measurement interval: ");
+    Serial.println(measurementInterval);
+    Serial.print("System open: ");
+    Serial.println(systemOpen ? "true" : "false");
+    Serial.print("Monitoring active: ");
+    Serial.println(monitoringActive ? "true" : "false");
+  } else {
+    Serial.print("Config GET failed. HTTP code: ");
+    Serial.println(responseCode);
+  }
+
+  http.end();
+
+  if (!systemOpen || !monitoringActive) {
+    setFan(false);
+  }
+}
+
+
 void sendDataToServer(float temperature, float humidity) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi disconnected. Reconnecting...");
@@ -74,8 +188,9 @@ void sendDataToServer(float temperature, float humidity) {
 
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
+    String url = buildUrl(DATA_ENDPOINT);
 
-    http.begin(SERVER_URL);
+    http.begin(url);
     http.addHeader("Content-Type", "application/json");
 
     String json = "{";
@@ -116,24 +231,30 @@ void sendDataToServer(float temperature, float humidity) {
   }
 }
 
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
   Serial.println("ESP32 DHT11 HTTP sender started");
 
- 
   pinMode(RELAY_PIN, INPUT);
-  setFan(false); // fan OFF at startup
+  setFan(false);
 
   dht.begin();
   connectToWiFi();
 }
 
+
 void loop() {
   unsigned long currentTime = millis();
 
-  if (currentTime - lastMeasurementTime >= MEASUREMENT_INTERVAL) {
+  if (currentTime - lastConfigTime >= CONFIG_INTERVAL) {
+    lastConfigTime = currentTime;
+    fetchConfigFromServer();
+  }
+
+  if (currentTime - lastMeasurementTime >= measurementInterval) {
     lastMeasurementTime = currentTime;
 
     float humidity = dht.readHumidity();
@@ -144,12 +265,15 @@ void loop() {
       return;
     }
 
-    // Fan control with hysteresis
-    if (!fanState && temperature >= FAN_ON_TEMP) {
-      setFan(true);
-    }
+    if (systemOpen && monitoringActive) {
+      if (!fanState && temperature >= fanOnTemp) {
+        setFan(true);
+      }
 
-    if (fanState && temperature <= FAN_OFF_TEMP) {
+      if (fanState && temperature <= fanOffTemp) {
+        setFan(false);
+      }
+    } else {
       setFan(false);
     }
 
