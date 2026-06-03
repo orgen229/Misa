@@ -1,127 +1,132 @@
-# IoT systém na meranie teploty a vlhkosti pomocou ESP32
+# POIT IoT webová aplikácia na monitorovanie teploty a vlhkosti a riadenie ventilátora
 
 ## 1. Popis projektu
 
-Tento projekt realizuje IoT systém na meranie fyzikálnych veličín pomocou reálneho hardvérového snímača. Systém meria teplotu a relatívnu vlhkosť vzduchu pomocou snímača DHT11, ktorý je pripojený k mikrokontroléru ESP32.
+Tento projekt bol vytvorený ako záverečné zadanie z predmetu **POIT**. Cieľom projektu je monitorovať a riadiť signály získané z reálneho hardvéru prostredníctvom webovej aplikácie v súlade s koncepciou IoT.
 
-ESP32 sa pripája k Wi-Fi sieti a v pravidelnom intervale odosiela namerané hodnoty na serverovú aplikáciu vytvorenú v jazyku Python pomocou frameworku Flask. Dáta sú prenášané vo formáte JSON pomocou HTTP POST požiadavky.
+Systém meria **teplotu** a **relatívnu vlhkosť vzduchu** pomocou snímača **DHT11**, ktorý je pripojený k mikrokontroléru **ESP32**. ESP32 odosiela namerané údaje cez Wi-Fi sieť na serverovú aplikáciu vytvorenú v jazyku Python pomocou frameworku **Flask**.
 
-Server prijaté merania ukladá do SQLite databázy spolu s časovou pečiatkou. Webové rozhranie zobrazuje aktuálne hodnoty, čas posledného merania, historické grafy a tabuľku posledných meraní.
+Okrem monitorovania je v projekte realizované aj jednoduché riadenie akčného člena. Ak nameraná teplota prekročí nastavenú hranicu, pomocou relé modulu sa zapne 5V ventilátor. Pri poklese teploty pod dolnú hranicu sa ventilátor vypne. Ide o dvojpolohovú reguláciu s hysteréziou.
 
-Projekt pokrýva celý reťazec:
+Projekt realizuje celý reťazec:
 
 ```text
-fyzický snímač → ESP32 firmvér → Wi-Fi prenos → Flask server → SQLite databáza → webová vizualizácia
+DHT11 → ESP32 → Wi-Fi / HTTP JSON → Flask server → SQLite + CSV → Web dashboard
 ```
 
-## 2. Merané veličiny
+## 2. Hlavné funkcie aplikácie
 
-Systém meria tieto fyzikálne veličiny:
+Webová aplikácia realizuje požadované funkcie zadania:
 
-- teplota vzduchu v °C
-- relatívna vlhkosť vzduchu v %
+| Bod zadania | Funkcia | Realizácia v projekte |
+|---|---|---|
+| 1 | Open | Inicializácia systému tlačidlom `Open` |
+| 2 | Nastavenie parametrov | Nastavenie prahov ventilátora a intervalu merania |
+| 3 | Start | Spustenie monitorovania tlačidlom `Start` |
+| 4 | Zoznam údajov | Tabuľka posledných meraní |
+| 5 | Grafy | Graf teploty a graf vlhkosti pomocou Chart.js |
+| 6 | Ručičkové ukazovatele | Gauge ukazovatele pre teplotu a vlhkosť |
+| 7 | Archivácia do databázy | Ukladanie meraní do SQLite databázy |
+| 8 | Archivácia do súboru | Ukladanie meraní do CSV súboru |
+| 9 | Stop | Zastavenie monitorovania tlačidlom `Stop` |
+| 10 | Close | Deaktivácia systému tlačidlom `Close` |
 
-Použitý snímač DHT11 poskytuje digitálny výstup obsahujúci hodnotu teploty a vlhkosti.
-
-## 3. Funkčné požiadavky
-
-Projekt spĺňa nasledujúce požiadavky:
-
-| Požiadavka | Splnenie v projekte |
-|---|---|
-| R1 — Meranie fyzikálnej veličiny | ESP32 meria teplotu a vlhkosť pomocou snímača DHT11 |
-| R2 — Bezdrôtový prenos | Dáta sú prenášané cez Wi-Fi pomocou HTTP POST |
-| R3 — Ukladanie dát | Dáta sú ukladané do SQLite databázy spolu s časovou pečiatkou |
-| R4 — Webová vizualizácia | Webový dashboard zobrazuje aktuálne aj historické hodnoty |
-| R5 — Dostupnosť | Dashboard môže byť sprístupnený pomocou ngrok tunela |
-
-## 4. Použitý hardvér
+## 3. Použitý hardvér
 
 | Komponent | Účel |
 |---|---|
-| ESP32 NodeMCU 38-pin s CP2102 | mikrokontrolérová platforma s Wi-Fi |
-| DHT11 | snímač teploty a vlhkosti |
-| Nepájivé pole | zapojenie bez spájkovania |
-| Dupont vodiče | prepojenie komponentov |
-| USB-C kábel | napájanie ESP32 a nahratie firmvéru |
-| 5V relé modul | spínanie ventilátora |
-| 5V ventilátor | akčný člen na jednoduché chladenie |
-| LED dióda | voliteľná signalizácia stavu |
+| ESP32 NodeMCU 38-pin s CP2102 | Mikrokontrolér s Wi-Fi pripojením |
+| DHT11 | Snímač teploty a vlhkosti |
+| Relé modul 5V | Spínanie ventilátora |
+| Ventilátor 5V | Akčný člen pre jednoduché chladenie |
+| Nepájivé pole | Zapojenie komponentov bez spájkovania |
+| Dupont vodiče | Prepojenie komponentov |
+| USB-C kábel | Napájanie a nahratie firmvéru |
 
-## 5. Odôvodnenie výberu hardvéru
+## 4. Použitý softvér
 
-### ESP32
+| Technológia | Účel |
+|---|---|
+| Arduino IDE | Vývoj a nahratie firmvéru do ESP32 |
+| Python | Serverová časť |
+| Flask | Webový server a REST API |
+| SQLite | Databázová archivácia meraní |
+| CSV | Súborová archivácia meraní |
+| HTML / CSS / JavaScript | Klientska časť |
+| Chart.js | Vykreslenie grafov |
+| GitHub | Verzionovanie projektu |
 
-ESP32 bol zvolený, pretože obsahuje integrované Wi-Fi rozhranie, dostatočný počet GPIO pinov a je vhodný pre IoT aplikácie. Umožňuje jednoduché pripojenie k bezdrôtovej sieti a odosielanie dát na server pomocou HTTP požiadaviek.
+## 5. Architektúra systému
 
-### DHT11
+Architektúra pozostáva z troch hlavných vrstiev:
 
-DHT11 bol zvolený z dôvodu jednoduchej dostupnosti, nízkej ceny a možnosti merať dve environmentálne veličiny jedným snímačom: teplotu a vlhkosť. Pre účely školského demonštračného IoT projektu je jeho presnosť postačujúca.
-
-### Relé modul a ventilátor
-
-Relé modul a 5V ventilátor sú použité ako jednoduchý akčný člen. Ventilátor sa zapne pri prekročení nastavenej teplotnej hranice a vypne sa po poklese teploty pod dolnú hranicu. Tým je demonštrované jednoduché riadenie podľa meranej veličiny.
-
-## 6. Kategória snímača
-
-Použitý snímač: **DHT11**
-
-DHT11 je digitálny snímač teploty a vlhkosti. Komunikuje pomocou proprietárneho jednovodičového digitálneho protokolu. Výstup zo snímača je spracovaný priamo firmvérom ESP32 pomocou knižnice `DHT.h`.
-
-Príklad získaných hodnôt:
-
-```json
-{
-  "temperature": 30.2,
-  "humidity": 44.0
-}
-```
-
-## 7. Architektúra systému
-
-Systém pozostáva z troch hlavných vrstiev:
-
-1. **Snímacia vrstva**
+1. **Hardvérová vrstva**
+   - DHT11 snímač
    - ESP32
-   - DHT11
    - relé modul
    - ventilátor
 
 2. **Serverová vrstva**
-   - Python Flask server
+   - Flask server
    - REST API
    - SQLite databáza
+   - CSV súbor
 
-3. **Vizualizačná vrstva**
-   - HTML webové rozhranie
-   - JavaScript
-   - Chart.js grafy
+3. **Klientska vrstva**
+   - webový dashboard
+   - grafy
+   - tabuľka údajov
+   - ručičkové ukazovatele
+   - ovládacie tlačidlá
 
-Diagram architektúry je uložený v súbore:
+Diagram architektúry je uložený v priečinku:
 
 ```text
 docs/architecture.png
 ```
 
-Zjednodušená architektúra:
+## 6. UML diagramy
+
+Projekt obsahuje UML diagramy potrebné pre technickú dokumentáciu:
 
 ```text
-+---------+       +-------+       Wi-Fi / HTTP POST       +----------------+
-| DHT11   | ----> | ESP32 | ----------------------------> | Flask server   |
-+---------+       +-------+          JSON dáta            +----------------+
-                                                               |
-                                                               v
-                                                        +---------------+
-                                                        | SQLite DB     |
-                                                        +---------------+
-                                                               |
-                                                               v
-                                                        +---------------+
-                                                        | Web dashboard |
-                                                        +---------------+
+docs/uml_use_case_diagram.png
+docs/uml_component_diagram.png
+docs/uml_sequence_diagram.png
 ```
 
-## 8. Schéma zapojenia
+### UML diagram prípadov použitia
+
+Zobrazuje hlavné funkcie systému z pohľadu používateľa:
+
+- Open system
+- Nastaviť parametre
+- Start monitorovania
+- Zobraziť zoznam meraní
+- Zobraziť grafy
+- Zobraziť ručičkové ukazovatele
+- Stiahnuť CSV
+- Stop monitorovania
+- Close system
+
+### UML komponentový diagram
+
+Zobrazuje hlavné komponenty systému:
+
+- DHT11 snímač
+- ESP32 firmvér
+- Relé modul
+- Ventilátor
+- Flask server
+- SQLite databáza
+- CSV súbor
+- Web dashboard
+
+### UML sekvenčný diagram
+
+Zobrazuje komunikáciu medzi používateľom, webovým dashboardom, serverom, ESP32, snímačom a archivačnými časťami systému.
+
+## 7. Zapojenie hardvéru
 
 Schéma zapojenia je uložená v súbore:
 
@@ -149,113 +154,83 @@ docs/schema.png
 
 | Prvok | Zapojenie |
 |---|---|
-| Relay COM | 5V |
-| Relay NO | červený vodič ventilátora |
-| čierny vodič ventilátora | GND |
-| Relay NC | nepoužíva sa |
+| COM relé | 5V |
+| NO relé | kladný vodič ventilátora |
+| záporný vodič ventilátora | GND |
+| NC relé | nepoužíva sa |
 
-Relé je zapojené ako spínač napájania ventilátora. Používa sa kombinácia kontaktov COM a NO, aby bol ventilátor pri neaktívnom relé vypnutý.
+Relé je použité ako spínač napájania ventilátora. Ventilátor je pripojený na kontakty **COM** a **NO**, aby bol v pokojovom stave vypnutý.
 
-## 9. Firmvér
+## 8. Firmvér ESP32
 
-Firmvér je programová časť nahraná priamo do mikrokontroléra ESP32.
-
-V projekte firmvér zabezpečuje:
-
-- inicializáciu snímača DHT11
-- pripojenie ESP32 k Wi-Fi sieti
-- pravidelné meranie teploty a vlhkosti
-- vytvorenie JSON správy
-- odosielanie dát na Flask server pomocou HTTP POST
-- základné ošetrenie výpadku Wi-Fi pripojenia pomocou opätovného pripojenia
-- riadenie ventilátora podľa nameranej teploty
-
-Firmvér je vytvorený v prostredí **Arduino IDE**.
-
-Umiestnenie hlavného firmvéru v repozitári:
+Firmvér sa nachádza v priečinku:
 
 ```text
 firmware/esp32_dht11_http/esp32_dht11_http.ino
 ```
 
-## 10. Testovací sketch pre relé
+Firmvér zabezpečuje:
 
-V repozitári sa nachádza aj testovací sketch:
+- pripojenie ESP32 k Wi-Fi sieti,
+- čítanie údajov zo snímača DHT11,
+- získavanie konfiguračných parametrov zo servera,
+- riadenie ventilátora pomocou relé,
+- vytváranie JSON správy,
+- odosielanie údajov na Flask server pomocou HTTP POST.
 
-```text
-sketch_apr29a/
+Pred nahratím firmvéru je potrebné nastaviť Wi-Fi údaje a adresu servera:
+
+```cpp
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* SERVER_BASE_URL = "http://YOUR_SERVER_IP:5000";
 ```
 
-Tento sketch slúžil na overenie funkčnosti relé modulu a ventilátora. Pomocou neho bolo možné samostatne otestovať, či relé reaguje na signál z ESP32 a či sa ventilátor správne zapína a vypína.
+Reálne heslá a lokálne IP adresy nemajú byť uložené vo verejnom repozitári.
 
-Tento súbor nie je hlavnou časťou finálneho systému, ale slúži ako pomocný testovací kód počas vývoja.
+## 9. Regulácia ventilátora
 
-## 11. Perióda merania
+Ventilátor je riadený pomocou dvojpolohovej regulácie s hysteréziou.
 
-Perióda merania bola nastavená na:
+Predvolené hodnoty:
 
 ```text
-5 sekúnd
+Fan ON threshold  = 33 °C
+Fan OFF threshold = 32 °C
 ```
 
-Teplota a vlhkosť sa menia relatívne pomaly, preto nie je potrebné merať hodnoty v milisekundových intervaloch. Interval 5 sekúnd je vhodný pre demonštráciu počas obhajoby, pretože zmeny sú viditeľné dostatočne rýchlo a zároveň systém nevytvára zbytočne veľké množstvo dát.
-
-## 12. Riadenie ventilátora
-
-Ventilátor je riadený pomocou jednoduchej dvojpolohovej regulácie s hysteréziou.
-
-Použitá logika:
+Logika:
 
 ```text
 teplota >= 33 °C → ventilátor ON
 teplota <= 32 °C → ventilátor OFF
 ```
 
-Hysterézia zabraňuje tomu, aby sa relé a ventilátor príliš často zapínali a vypínali pri malej zmene teploty okolo jednej hranice.
+Hysterézia zabraňuje častému prepínaniu relé v prípade, že sa teplota pohybuje okolo jednej hranice.
 
-Stav ventilátora je zároveň odosielaný na server ako súčasť JSON správy.
+Parametre je možné upraviť priamo vo webovej aplikácii.
 
-## 13. Komunikačný protokol
+## 10. Komunikačný protokol
 
-Na prenos dát medzi ESP32 a serverom bol zvolený protokol:
+ESP32 komunikuje so serverom pomocou protokolu HTTP.
 
-```text
-HTTP POST
-```
+Použité endpointy:
 
-Dôvody výberu:
+| Endpoint | Metóda | Popis |
+|---|---|---|
+| `/api/data` | POST | Príjem údajov z ESP32 |
+| `/api/config` | GET | Získanie nastavení pre ESP32 |
+| `/api/config` | POST | Zmena nastavení z webového rozhrania |
+| `/api/open` | POST | Inicializácia systému |
+| `/api/start` | POST | Spustenie monitorovania |
+| `/api/stop` | POST | Zastavenie monitorovania |
+| `/api/close` | POST | Ukončenie systému |
+| `/api/latest` | GET | Posledné meranie |
+| `/api/history` | GET | Historické merania |
+| `/api/file-history` | GET | Údaje uložené v CSV |
+| `/api/download-csv` | GET | Stiahnutie CSV súboru |
 
-- jednoduchá implementácia na ESP32
-- jednoduché spracovanie vo Flask aplikácii
-- vhodné pre REST API architektúru
-- jednoduché testovanie pomocou webového prehliadača alebo nástrojov ako curl
-- čitateľný formát dát JSON
-
-ESP32 odosiela dáta na endpoint:
-
-```text
-POST /api/data
-```
-
-Príklad adresy servera:
-
-```text
-http://<SERVER_IP>:5000/api/data
-```
-
-## 14. Bezpečnosť prenosu
-
-Počas lokálneho testovania prebieha komunikácia medzi ESP32 a Flask serverom pomocou HTTP protokolu v lokálnej sieti. Táto voľba bola zvolená z dôvodu jednoduchosti implementácie a demonštračného charakteru projektu.
-
-Pre verejný prístup k webovému dashboardu je možné použiť ngrok tunel, ktorý poskytuje verejnú HTTPS adresu.
-
-V produkčnom nasadení by bolo vhodné doplniť HTTPS priamo na serverovej strane, autentifikáciu zariadenia a bezpečné uloženie konfiguračných údajov.
-
-## 15. Formát prenášaných dát
-
-Dáta sú prenášané vo formáte JSON.
-
-Príklad správy odosielanej z ESP32:
+Príklad JSON správy z ESP32:
 
 ```json
 {
@@ -268,165 +243,138 @@ Príklad správy odosielanej z ESP32:
 }
 ```
 
-Server doplní časovú pečiatku pri prijatí správy.
+## 11. Serverová časť
 
-## 16. Serverová časť
+Serverová časť sa nachádza v priečinku:
 
-Serverová časť je implementovaná v jazyku Python pomocou frameworku Flask.
+```text
+server/
+```
 
-Umiestnenie serverovej časti:
+Hlavný súbor:
 
 ```text
 server/app.py
 ```
 
-Hlavné endpointy:
+Server zabezpečuje:
 
-| Endpoint | Metóda | Popis |
-|---|---|---|
-| `/` | GET | webový dashboard |
-| `/api/data` | POST | príjem dát z ESP32 |
-| `/api/latest` | GET | posledné meranie |
-| `/api/history` | GET | história meraní |
+- zobrazenie webového dashboardu,
+- spracovanie tlačidiel Open / Start / Stop / Close,
+- spracovanie nastavenia parametrov,
+- príjem údajov z ESP32,
+- uloženie údajov do SQLite databázy,
+- zápis údajov do CSV súboru,
+- poskytovanie aktuálnych a historických údajov klientovi.
 
-Server prijíma JSON dáta z ESP32, validuje ich a ukladá do SQLite databázy.
+## 12. Databáza SQLite
 
-## 17. Databáza
-
-Ako databáza bola zvolená:
+Databázový súbor:
 
 ```text
-SQLite
+measurements.db
 ```
 
-Dôvody výberu:
-
-- jednoduché použitie bez samostatného databázového servera
-- vhodná pre menší IoT projekt
-- dáta sú uložené lokálne v jednom súbore
-- jednoduché nasadenie
-- prenositeľnosť projektu
+Databáza sa vytvorí automaticky pri spustení servera.
 
 Tabuľka `measurements` obsahuje:
 
-| Stĺpec | Typ | Popis |
-|---|---|---|
-| id | INTEGER | primárny kľúč |
-| temperature | REAL | teplota |
-| humidity | REAL | vlhkosť |
-| sensor | TEXT | názov snímača |
-| unit_temperature | TEXT | jednotka teploty |
-| unit_humidity | TEXT | jednotka vlhkosti |
-| fan_state | TEXT | stav ventilátora |
-| timestamp | TEXT | čas prijatia merania |
+| Stĺpec | Popis |
+|---|---|
+| id | Primárny kľúč |
+| temperature | Nameraná teplota |
+| humidity | Nameraná vlhkosť |
+| sensor | Názov snímača |
+| unit_temperature | Jednotka teploty |
+| unit_humidity | Jednotka vlhkosti |
+| fan_state | Stav ventilátora |
+| fan_on_threshold | Prah zapnutia ventilátora |
+| fan_off_threshold | Prah vypnutia ventilátora |
+| timestamp | Čas prijatia merania |
 
-Databázový súbor `measurements.db` sa nevkladá do repozitára, pretože vzniká automaticky pri spustení servera.
+## 13. CSV archivácia
 
-## 18. Webová vizualizácia
-
-Webové rozhranie zobrazuje:
-
-- aktuálnu teplotu
-- aktuálnu vlhkosť
-- jednotku meranej veličiny
-- názov snímača
-- čas posledného merania
-- stav ventilátora
-- historický graf teploty
-- historický graf vlhkosti
-- tabuľku posledných meraní
-
-Na vykreslenie grafov je použitá knižnica:
+Okrem databázy sa merania ukladajú aj do súboru:
 
 ```text
-Chart.js
+measurements.csv
 ```
 
-Dashboard sa automaticky obnovuje každých 5 sekúnd.
+CSV súbor je možné:
 
-## 19. Historické dáta
+- zobraziť vo webovej aplikácii,
+- stiahnuť pomocou tlačidla `Stiahnuť CSV`.
 
-Dashboard umožňuje zobrazenie histórie v dvoch režimoch:
+## 14. Klientska časť
 
-1. **Posledných 20 meraní**
-2. **Posledných 24 hodín**
-
-Tým je splnená požiadavka na zobrazenie historických dát minimálne za posledných 24 hodín.
-
-Endpoint pre históriu:
+Klientska časť sa nachádza v súbore:
 
 ```text
-GET /api/history?mode=last20
-GET /api/history?mode=24h
+server/templates/index.html
 ```
 
-## 20. Dostupnosť webového rozhrania
+Dashboard obsahuje:
 
-Webové rozhranie beží lokálne na porte 5000:
+- tlačidlá Open / Start / Stop / Close,
+- formulár na nastavenie parametrov,
+- aktuálnu teplotu,
+- aktuálnu vlhkosť,
+- stav ventilátora,
+- čas posledného merania,
+- graf teploty,
+- graf vlhkosti,
+- ručičkové ukazovatele,
+- tabuľku meraní,
+- prepínanie režimu histórie,
+- zobrazenie údajov z CSV,
+- stiahnutie CSV súboru.
+
+## 15. Historické údaje
+
+Dashboard podporuje dva režimy zobrazenia histórie:
 
 ```text
-http://127.0.0.1:5000/
+Posledných 20 meraní
+Posledných 24 hodín
 ```
 
-Počas demonštrácie môže byť sprístupnené verejne pomocou tunelového riešenia **ngrok**:
+Tým je splnená požiadavka na zobrazenie historických údajov za zvolené časové obdobie.
+
+## 16. Inštalácia serverovej časti
+
+Prejdite do priečinka servera:
 
 ```bash
-ngrok http 5000
+cd server
 ```
 
-Ngrok vytvorí verejnú HTTPS adresu, cez ktorú je možné dashboard otvoriť aj mimo lokálnej siete.
-
-Príklad:
-
-```text
-https://<generated-ngrok-url>.ngrok-free.app
-```
-
-Na bezdrôtový prenos dát z ESP32 bol počas testovania použitý iPhone hotspot alebo lokálna Wi-Fi sieť.
-
-## 21. Konfiguračné parametre
-
-Citlivé údaje, ako názov Wi-Fi siete, heslo alebo IP adresa servera, sa nemajú ukladať priamo do verejného repozitára.
-
-Vo firmvéri je potrebné pred nahratím nastaviť:
-
-```cpp
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* SERVER_URL = "http://YOUR_SERVER_IP:5000/api/data";
-```
-
-Reálne heslá a lokálne IP adresy nie sú súčasťou verejného repozitára.
-
-## 22. Inštalácia serverovej časti
-
-### 1. Klonovanie repozitára
-
-```bash
-git clone https://github.com/<USERNAME>/<REPOSITORY_NAME>.git
-cd <REPOSITORY_NAME>/server
-```
-
-### 2. Vytvorenie virtuálneho prostredia
+Vytvorte virtuálne prostredie:
 
 ```bash
 python3 -m venv venv
+```
+
+Aktivujte virtuálne prostredie:
+
+Linux / Raspberry Pi:
+
+```bash
 source venv/bin/activate
 ```
 
-### 3. Inštalácia závislostí
+Windows:
+
+```bash
+venv\Scripts\activate
+```
+
+Nainštalujte závislosti:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Obsah súboru `requirements.txt`:
-
-```text
-Flask
-```
-
-### 4. Spustenie servera
+Spustite server:
 
 ```bash
 python3 app.py
@@ -438,94 +386,183 @@ Server bude dostupný na adrese:
 http://127.0.0.1:5000/
 ```
 
-## 23. Nahratie firmvéru do ESP32
+## 17. Nahratie firmvéru do ESP32
 
-### 1. Otvorenie Arduino IDE
+1. Otvoriť Arduino IDE.
+2. Nainštalovať podporu pre ESP32 dosky.
+3. Vybrať dosku `ESP32 Dev Module`.
+4. Vybrať správny COM port.
+5. Nainštalovať knižnice:
+   - `DHT sensor library`
+   - `Adafruit Unified Sensor`
+6. Upraviť Wi-Fi údaje a IP adresu servera.
+7. Nahrať firmvér do ESP32.
 
-V Arduino IDE je potrebné nainštalovať podporu pre ESP32 dosky:
+Ak sa nahrávanie zasekne na `Connecting...`, je možné podržať tlačidlo `BOOT` na ESP32.
 
-```text
-esp32 by Espressif Systems
-```
+## 18. Spustenie celého systému
 
-### 2. Výber dosky
+Odporúčaný postup:
 
-V Arduino IDE zvoliť:
-
-```text
-Tools → Board → ESP32 Dev Module
-```
-
-### 3. Výber portu
-
-Po pripojení ESP32 cez USB-C zvoliť príslušný COM port:
-
-```text
-Tools → Port → COMx
-```
-
-Ak sa port nezobrazí, je potrebné nainštalovať ovládač pre CP210x USB to UART Bridge.
-
-### 4. Inštalácia knižníc
-
-V Arduino Library Manager je potrebné nainštalovať:
-
-```text
-DHT sensor library
-Adafruit Unified Sensor
-```
-
-### 5. Nastavenie Wi-Fi a servera
-
-Vo firmvéri je potrebné upraviť:
-
-```cpp
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* SERVER_URL = "http://YOUR_SERVER_IP:5000/api/data";
-```
-
-### 6. Nahratie firmvéru
-
-Kliknúť na:
-
-```text
-Upload
-```
-
-Ak sa nahrávanie zasekne na `Connecting...`, je možné podržať tlačidlo `BOOT` na ESP32, kým sa nezačne zápis firmvéru.
-
-## 24. Spustenie celého systému
-
-Postup spustenia:
-
-1. Pripojiť ESP32 k počítaču alebo napájaniu.
-2. Spustiť Flask server:
+1. Spustiť Flask server:
 
 ```bash
+cd server
 python3 app.py
 ```
 
-3. Otvoriť dashboard:
+2. Otvoriť dashboard:
 
 ```text
 http://127.0.0.1:5000/
 ```
 
-4. ESP32 sa pripojí k Wi-Fi a začne odosielať merania.
-5. Na dashboarde sa zobrazia aktuálne hodnoty a grafy.
-6. Pre verejný prístup je možné spustiť ngrok:
+3. Pripojiť ESP32 k napájaniu.
+4. Na dashboarde stlačiť tlačidlo `Open`.
+5. Nastaviť parametre regulácie.
+6. Stlačiť tlačidlo `Start`.
+7. Sledovať tabuľku, grafy a ručičkové ukazovatele.
+8. Podľa potreby stiahnuť CSV súbor.
+9. Tlačidlom `Stop` zastaviť monitorovanie.
+10. Tlačidlom `Close` deaktivovať systém.
 
-```bash
-ngrok http 5000
+## 19. Štruktúra repozitára
+
+Odporúčaná štruktúra:
+
+```text
+/
+├── firmware/
+│   └── esp32_dht11_http/
+│       └── esp32_dht11_http.ino
+├── server/
+│   ├── app.py
+│   ├── requirements.txt
+│   └── templates/
+│       └── index.html
+├── docs/
+│   ├── architecture.png
+│   ├── schema.png
+│   ├── uml_use_case_diagram.png
+│   ├── uml_component_diagram.png
+│   ├── uml_sequence_diagram.png
+│   └── dashboard_screenshot.png
+├── sketch_apr29a/
+├── README.md
+├── Technicka_dokumentacia_POIT.tex
+└── .gitignore
 ```
 
+## 20. Technická dokumentácia
 
+Technická dokumentácia pre POIT je pripravená vo formáte LaTeX:
 
-Autor projektu:
+```text
+Technicka_dokumentacia_POIT.tex
+```
+
+Dokumentácia obsahuje:
+
+- úvod,
+- cieľ zadania,
+- použitý hardvér a softvér,
+- architektúru systému,
+- UML diagramy,
+- hardvérové zapojenie,
+- serverovú časť,
+- klientskú časť,
+- databázu a CSV archiváciu,
+- používateľskú príručku,
+- vývojársku príručku,
+- testovanie,
+- záver.
+
+## 21. Testovanie
+
+Systém bol testovaný postupne:
+
+1. Čítanie údajov zo snímača DHT11.
+2. Testovanie relé pomocou samostatného sketchu.
+3. Pripojenie ESP32 k Wi-Fi sieti.
+4. Odosielanie JSON dát na Flask server.
+5. Ukladanie údajov do SQLite databázy.
+6. Zápis údajov do CSV súboru.
+7. Zobrazenie údajov v tabuľke.
+8. Zobrazenie grafov.
+9. Zobrazenie ručičkových ukazovateľov.
+10. Ovládanie systému tlačidlami Open / Start / Stop / Close.
+
+## 22. Testovací sketch relé
+
+Priečinok:
+
+```text
+sketch_apr29a/
+```
+
+obsahuje testovací sketch, ktorý bol použitý na overenie funkčnosti relé modulu a ventilátora. Slúži iba ako pomocný vývojový súbor a nie je hlavnou časťou finálneho systému.
+
+## 23. GitHub a verzionovanie
+
+Pri vývoji bol použitý GitHub. Jednotlivé zmeny sú ukladané ako commity s popisom vykonanej práce.
+
+Repozitár:
+
+```text
+https://github.com/orgen229/Misa
+```
+
+Pred odovzdaním treba skontrolovať, že repozitár neobsahuje:
+
+- reálne Wi-Fi heslá,
+- súbor `measurements.db`,
+- súbor `measurements.csv`,
+- virtuálne prostredie Python,
+- dočasné súbory.
+
+## 24. .gitignore
+
+Odporúčaný obsah `.gitignore`:
+
+```gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+measurements.db
+measurements.csv
+*.db
+
+.env
+venv/
+.venv/
+
+.DS_Store
+Thumbs.db
+```
+
+## 25. Možné rozšírenia
+
+Možné rozšírenia projektu:
+
+- použitie presnejšieho snímača DHT22 alebo BME280,
+- použitie MQTT protokolu,
+- autentifikácia používateľa,
+- HTTPS komunikácia,
+- nasadenie servera na cloud,
+- export údajov do ďalších formátov,
+- samostatná mobilná verzia dashboardu,
+- podrobnejšie logovanie chýb.
+
+## 26. Autor
+
+```text
 Ablazov Yehor
-
+```
 
 Predmet:
-MISA
 
+```text
+POIT
+```
